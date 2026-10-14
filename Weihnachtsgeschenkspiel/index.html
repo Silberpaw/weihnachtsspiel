@@ -1,0 +1,2095 @@
+
+
+<!DOCTYPE html>
+
+<html lang="de">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Unser Zuhause – Weihnachtsabenteuer</title>
+
+  <style>
+
+    * {
+
+      box-sizing: border-box;
+
+    }
+
+    body {
+
+      margin: 0;
+
+      background: #172a20;
+
+      color: #f8e8c6;
+
+      font-family: monospace;
+
+      text-align: center;
+
+    }
+
+    h2 {
+
+      margin: 12px 0 5px;
+
+    }
+
+    p {
+
+      margin: 5px 10px 10px;
+
+    }
+
+    #game {
+
+      display: flex;
+
+      justify-content: center;
+
+      padding: 0 8px 10px;
+
+    }
+
+    #game canvas {
+
+      display: block;
+
+      max-width: 100%;
+
+      height: auto;
+
+      image-rendering: pixelated;
+
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <h2>🏡 Unser Zuhause – Weihnachtsabenteuer</h2>
+
+  <p>
+
+    WASD / Pfeiltasten: bewegen ·
+
+    E: sprechen ·
+
+    K: Kollisionsfelder anzeigen ·
+
+    Mausrad: Zoom
+
+  </p>
+
+  <div id="game"></div>
+
+  <script src="phaser.js"></script>
+
+  <script>
+
+    const VIEW_W = 960;
+
+    const VIEW_H = 600;
+
+    const START_X = 600;
+
+    const START_Y = 668;
+
+    const SPEED = 170;
+
+    // Mareis Spritesheet:
+
+    // 3 Spalten, 4 Zeilen, je 128 x 256 Pixel.
+
+    // Reihenfolge: unten, links, rechts, oben.
+
+    const MAREI_FRAME_W = 128;
+
+    const MAREI_FRAME_H = 256;
+
+    // So groß erscheint Marei ungefähr auf der Karte.
+
+    const MAREI_SCALE = 0.16;
+
+    let player = null;
+
+    let keys = null;
+
+    let people = [];
+
+    let animals = [];
+
+    let messageTitle = null;
+
+    let messageText = null;
+
+    let worldWidth = 0;
+
+    let worldHeight = 0;
+
+    const config = {
+
+      type: Phaser.AUTO,
+
+      parent: 'game',
+
+      width: VIEW_W,
+
+      height: VIEW_H,
+
+      backgroundColor: '#476d42',
+
+      pixelArt: true,
+
+      roundPixels: true,
+
+      physics: {
+
+        default: 'arcade',
+
+        arcade: {
+
+          debug: false
+
+        }
+
+      },
+
+      scale: {
+
+        mode: Phaser.Scale.FIT,
+
+        autoCenter: Phaser.Scale.CENTER_BOTH
+
+      },
+
+      scene: {
+
+        preload: preload,
+
+        create: create,
+
+        update: update
+
+      }
+
+    };
+
+    new Phaser.Game(config);
+
+    // =====================================
+
+    // DATEIEN LADEN
+
+    // =====================================
+
+    function preload() {
+
+      // Hauskarte
+
+      this.load.tilemapTiledJSON
+
+        ('hauskarte', 'assets/map.json?v=2');
+
+      this.load.image(
+
+        'mapTiles',
+
+        'assets/spritesheet.png'
+
+      );
+
+      // Marei
+
+      this.load.spritesheet(
+
+        'marei',
+
+        'assets/marei.png',
+
+        {
+
+          frameWidth: MAREI_FRAME_W,
+
+          frameHeight: MAREI_FRAME_H
+
+        }
+
+      );
+
+        this.load.spritesheet('lia', 'assets/Lia.png', {
+
+            frameWidth: 341,
+
+            frameHeight: 377
+
+        });
+
+        this.load.spritesheet('jari', 'assets/Jari.png', {
+
+    frameWidth: 384,
+
+    frameHeight: 384
+
+});
+
+this.load.image('mama', 'assets/Mama.png');
+
+this.load.image('papa', 'assets/Papa.png');
+
+this.load.image('swantje', 'assets/Swantje.png');
+
+this.load.image('steffi', 'assets/Steffi.png');
+
+this.load.image('bjarne', 'assets/Bjarne.png');
+
+this.load.image('kai', 'assets/Kai.png');
+
+this.load.image('joris', 'assets/Joris.png');
+
+      // Tiere
+
+      this.load.spritesheet(
+
+        'katzeFiete',
+
+        'assets/1.png',
+
+        {
+
+          frameWidth: 32,
+
+          frameHeight: 32
+
+        }
+
+      );
+
+      this.load.spritesheet(
+
+        'katzeHenri',
+
+        'assets/Black.png',
+
+        {
+
+          frameWidth: 32,
+
+          frameHeight: 32
+
+        }
+
+      );
+
+      this.load.spritesheet(
+
+        'katzeAlfie',
+
+        'assets/Gray.png',
+
+        {
+
+          frameWidth: 32,
+
+          frameHeight: 32
+
+        }
+
+      );
+
+      this.load.spritesheet(
+
+        'hundEmil',
+
+        'assets/hundemil.png',
+
+        {
+
+          frameWidth: 32,
+
+          frameHeight: 32
+
+        }
+
+      );
+
+      this.load.on('loaderror', function(file) {
+
+        console.error(
+
+          'Datei konnte nicht geladen werden:',
+
+          file.src
+
+        );
+
+      });
+
+    }
+
+    // =====================================
+
+    // PERSONEN ZEICHNEN
+
+    // =====================================
+
+    function person(scene, x, y, name, shirt, hair) {
+
+      const c = scene.add.container(x, y);
+
+      c.displayName = name;
+
+      c.description = 'Schön, dass du da bist!';
+
+      const color = hex =>
+
+        Phaser.Display.Color.HexStringToColor(hex).color;
+
+      const block = (px, py, w, h, fill) => {
+
+        c.add(
+
+          scene.add.rectangle(
+
+            px + w / 2,
+
+            py + h / 2,
+
+            w,
+
+            h,
+
+            fill
+
+          )
+
+        );
+
+      };
+
+      // Beine
+
+      block(-8, 7, 6, 10, 0x51463e);
+
+      block(2, 7, 6, 10, 0x51463e);
+
+      // Oberkörper
+
+      block(-9, -7, 18, 16, color(shirt));
+
+      // Kopf
+
+      block(-7, -21, 14, 14, 0xf0bd8d);
+
+      // Haare
+
+      block(-8, -23, 16, 6, color(hair));
+
+      // Augen
+
+      block(-4, -16, 2, 2, 0x342b24);
+
+      block(3, -16, 2, 2, 0x342b24);
+
+      // Name
+
+      c.add(
+
+        scene.add.text(0, -34, name, {
+
+          fontFamily: 'monospace',
+
+          fontSize: '10px',
+
+          color: '#ffffff',
+
+          backgroundColor: '#24392a',
+
+          padding: {
+
+            x: 3,
+
+            y: 2
+
+          }
+
+        }).setOrigin(0.5)
+
+      );
+
+      c.setSize(30, 44);
+
+      c.setInteractive(
+
+        new Phaser.Geom.Rectangle(
+
+          -15, -26, 30, 48
+
+        ),
+
+        Phaser.Geom.Rectangle.Contains
+
+      );
+
+      c.on('pointerdown', () => {
+
+        say(c.displayName, c.description);
+
+      });
+
+      c.setDepth(y);
+
+      return c;
+
+    }
+
+    // =====================================
+
+    // DIALOG
+
+    // =====================================
+
+    function say(title, text) {
+
+      if (!messageTitle || !messageText) {
+
+        return;
+
+      }
+
+      messageTitle.setText(title);
+
+      messageText.setText(text);
+
+    }
+
+    // =====================================
+
+    // SPIEL ERSTELLEN
+
+    // =====================================
+
+    function create() {
+
+      people = [];
+
+      animals = [];
+
+      // ---------------------------------
+
+      // KARTE
+
+      // ---------------------------------
+
+      const map = this.make.tilemap({
+
+        key: 'hauskarte'
+
+      });
+
+      const tileset = map.addTilesetImage(
+
+        'spritefusion',
+
+        'mapTiles'
+
+      );
+
+      if (!tileset) {
+
+        this.add.text(
+
+          30,
+
+          30,
+
+          'Tileset konnte nicht geladen werden!',
+
+          { color: '#ffdddd' }
+
+        );
+
+        return;
+
+      }
+
+      // Alle sichtbaren Ebenen aus dem neuen SpriteFusion-Export.
+
+      // Sie verwenden gemeinsam das Tileset "spritefusion".
+
+      const sichtbareEbenen = [
+
+        'Layer_0',
+
+        'Layer_2',
+
+        'Layer_3',
+
+        'Layer_4',
+
+        'Layer_5',
+
+        'Layer_6'
+
+      ];
+
+      sichtbareEbenen.forEach((name, index) => {
+
+        const ebene = map.createLayer(name, tileset, 0, 0);
+
+        if (!ebene) {
+
+          console.error('Kartenebene fehlt:', name);
+
+          return;
+
+        }
+
+        // Die Karte bleibt hinter den Figuren (deren Tiefe ist ihre Y-Position).
+
+        ebene.setDepth(index - sichtbareEbenen.length);
+
+      });
+
+      // Persönliche Dialoge der Familie
+
+const dialoge = {
+
+    Mama: 'Hast du meine Riesenmelonen gesehen?',
+
+    Papa: 'Schnarch!',
+
+    Joris: 'Hast du Fiete gesehen? Swantje sucht den.',
+
+    Bjarne: 'Na, wie läufts? Ich freue mich auf Weihnachten!',
+
+    Swantje: 'Fiiiiiiiiiete',
+
+    Kai: 'Hey! Was geeeht? Hast du Reiner gesehen?',
+
+    Steffi: 'Schön, dass du da bist!',
+
+    Jari: 'Hallo,du Bisamratte!',
+
+    Lia: 'Wuff',
+
+    Emil: 'Wuff!',
+
+    Fiete: 'Fiete scheint Hunger zu haben',
+
+    Henri: 'Miau! Er singt in seiner schönsten Tonlage. Henri freut sich dich zu sehen!',
+
+    Alfie: 'Miau! Er schnurrt und freut sich dich zu sehen!'
+
+};
+
+      // ---------------------------------
+
+      // WANDKOLLISIONEN
+
+      // ---------------------------------
+
+      const waende = map.createLayer(
+
+        'Kollision',
+
+        tileset,
+
+        0,
+
+        0
+
+      );
+
+      if (!waende) {
+
+        this.add.text(
+
+          30,
+
+          60,
+
+          'Kollisionsebene fehlt!',
+
+          { color: '#ffdddd' }
+
+        );
+
+        return;
+
+      }
+
+      waende.setCollisionByExclusion([-1]);
+
+      waende.setVisible(false);
+
+      const collisionPreview = this.add.graphics();
+
+      collisionPreview.setDepth(90000);
+
+      collisionPreview.fillStyle(0xff3344, 0.5);
+
+      waende.forEachTile(tile => {
+
+        if (tile.index !== -1) {
+
+          collisionPreview.fillRect(
+
+            tile.pixelX,
+
+            tile.pixelY,
+
+            map.tileWidth,
+
+            map.tileHeight
+
+          );
+
+        }
+
+      });
+
+      collisionPreview.setVisible(false);
+
+      this.input.keyboard.on('keydown-K', () => {
+
+        collisionPreview.setVisible(
+
+          !collisionPreview.visible
+
+        );
+
+      });
+
+      worldWidth = map.widthInPixels;
+
+      worldHeight = map.heightInPixels;
+
+      this.physics.world.setBounds(
+
+        0,
+
+        0,
+
+        worldWidth,
+
+        worldHeight
+
+      );
+
+      // ---------------------------------
+
+      // POSITIONEN
+
+      // ---------------------------------
+
+      const px = Phaser.Math.Clamp(
+
+        START_X,
+
+        32,
+
+        worldWidth - 32
+
+      );
+
+      const py = Phaser.Math.Clamp(
+
+        START_Y,
+
+        32,
+
+        worldHeight - 32
+
+      );
+
+  const place = (dx, dy) => {
+
+    const FAMILY_X = 800;
+
+    const FAMILY_Y = 968;
+
+    return [
+
+        Phaser.Math.Clamp(FAMILY_X + dx, 24, worldWidth - 24),
+
+        Phaser.Math.Clamp(FAMILY_Y + dy, 24, worldHeight - 24)
+
+    ];
+
+};
+
+      // ---------------------------------
+
+      // FAMILIE
+
+      // ---------------------------------
+
+      const addPerson = (
+
+        dx,
+
+        dy,
+
+        name,
+
+        shirt,
+
+        hair
+
+      ) => {
+
+        const [x, y] = place(dx, dy);
+
+        const figur = person(
+
+          this,
+
+          x,
+
+          y,
+
+          name,
+
+          shirt,
+
+          hair
+
+        );
+
+        people.push(figur);
+
+        return figur;
+
+      };
+
+// Familie – statische Einzelbilder (bereits in preload() geladen)
+
+      const addStaticPerson = (dx, dy, name, texture, height = 48) => {
+
+        const [x, y] = place(dx, dy);
+
+        if (!this.textures.exists(texture)) {
+
+          console.warn('Bild fehlt:', texture);
+
+          return null;
+
+        }
+
+        const figur = this.add.image(x, y, texture);
+
+        figur.setOrigin(0.5, 1);
+
+        figur.setDisplaySize(figur.width * (height / figur.height), height);
+
+        figur.setDepth(y);
+
+        figur.displayName = name;
+
+        figur.description = dialoge[name] || 'Schön, dass du da bist!';
+
+        figur.setInteractive({ useHandCursor: true });
+
+        figur.on('pointerdown', () => say(figur.displayName, figur.description));
+
+        people.push(figur);
+
+        this.add.text(x, y - height - 9, name, {
+
+          fontFamily: 'monospace', fontSize: '10px', color: '#ffffff',
+
+          backgroundColor: '#24392a', padding: { x: 3, y: 2 }
+
+        }).setOrigin(0.5).setDepth(y + 1);
+
+        return figur;
+
+      };
+
+      // Die Positionen stammen aus deinem aktuellen Code.
+
+      addStaticPerson( 270, 555, 'Mama',    'mama');
+
+      addStaticPerson( 50, -375, 'Papa',    'papa');
+
+      addStaticPerson(-445,  -215, 'Joris',   'joris');
+
+      addStaticPerson(360, 125, 'Bjarne',  'bjarne');
+
+      addStaticPerson( -340, 30, 'Swantje', 'swantje');
+
+      addStaticPerson( -450,  -340, 'Kai',     'kai');
+
+      addStaticPerson(  390, 135, 'Steffi',  'steffi');
+
+      // Jari – animierter kleiner Junge
+
+const [jariX, jariY] = place(320, 35);
+
+const jari = this.add.sprite(jariX, jariY, 'jari', 6);
+
+jari.setScale(0.075);
+
+jari.setDepth(jari.y);
+
+jari.displayName = 'Jari';
+
+jari.description = dialoge.Jari;
+
+jari.setInteractive({ useHandCursor: true });
+
+jari.on('pointerdown', () => {
+
+    say(jari.displayName, jari.description);
+
+});
+
+people.push(jari);
+
+// Name über Jari
+
+const jariName = this.add.text(jariX, jariY - 30, 'Jari', {
+
+    fontFamily: 'monospace',
+
+    fontSize: '10px',
+
+    color: '#ffffff',
+
+    backgroundColor: '#24392a',
+
+    padding: { x: 3, y: 2 }
+
+}).setOrigin(0.5).setDepth(jari.y + 1);
+
+// Laufanimationen
+
+this.anims.create({
+
+    key: 'jari-rechts',
+
+    frames: this.anims.generateFrameNumbers('jari', {
+
+        start: 6,
+
+        end: 8
+
+    }),
+
+    frameRate: 4,
+
+    repeat: -1
+
+});
+
+this.anims.create({
+
+    key: 'jari-links',
+
+    frames: this.anims.generateFrameNumbers('jari', {
+
+        start: 3,
+
+        end: 5
+
+    }),
+
+    frameRate: 4,
+
+    repeat: -1
+
+});
+
+// Bewegung vorbereiten
+
+jari.startX = jariX;
+
+jari.walkDistance = 54;
+
+jari.walkSpeed = 12;
+
+jari.walkDirection = 1;
+
+jari.play('jari-rechts');
+
+this.jari = jari;
+
+this.jariName = jariName;
+
+      // Lia – animiertes kleines Mädchen
+
+const [liaX, liaY] = place(300, 45);
+
+const lia = this.add.sprite(liaX, liaY, 'lia', 6);
+
+lia.setScale(0.065);
+
+lia.setDepth(lia.y);
+
+lia.displayName = 'Lia';
+
+lia.description = 'Hallo! Ich bin Lia!';
+
+lia.setInteractive({ useHandCursor: true });
+
+lia.on('pointerdown', () => {
+
+    say(lia.displayName, lia.description);
+
+});
+
+people.push(lia);
+
+// Name über Lia
+
+const liaName = this.add.text(liaX, liaY - 30, 'Lia', {
+
+    fontFamily: 'monospace',
+
+    fontSize: '10px',
+
+    color: '#ffffff',
+
+    backgroundColor: '#24392a',
+
+    padding: { x: 3, y: 2 }
+
+}).setOrigin(0.5).setDepth(lia.y + 1);
+
+// Laufanimationen
+
+this.anims.create({
+
+    key: 'lia-vorne',
+
+    frames: this.anims.generateFrameNumbers('lia', {
+
+        start: 0,
+
+        end: 2
+
+    }),
+
+    frameRate: 3,
+
+    repeat: -1
+
+});
+
+this.anims.create({
+
+    key: 'lia-hinten',
+
+    frames: this.anims.generateFrameNumbers('lia', {
+
+        start: 9,
+
+        end: 11
+
+
+    }),
+
+    frameRate: 3,
+
+    repeat: -1
+
+});
+
+// Bewegung vorbereiten
+
+lia.startY = liaY;
+
+lia.walkDistance = 74;
+
+lia.walkSpeed = 10;
+
+lia.walkDirection = 1;
+
+lia.play('lia-vorne');
+
+// Für update() speichern
+
+this.lia = lia;
+
+this.liaName = liaName;
+
+
+
+    // Alfies Animation – die letzten 4 Frames
+    const alfieFrames = this.textures
+      .get('katzeAlfie')
+      .getFrameNames()
+      .filter(name => name !== '__BASE')
+      .map(Number)
+      .sort((a, b) => a - b);
+
+    const letzteVier = alfieFrames.slice(-4);
+
+    this.anims.create({
+      key: 'alfie-idle',
+      frames: letzteVier.map(frame => ({
+        key: 'katzeAlfie',
+        frame: frame
+      })),
+      frameRate: 0.5,
+      repeat: -1
+    });
+    // Fietes Laufanimation – Frames 25 bis 28
+this.anims.create({
+  key: 'henri-laufen',
+  frames: this.anims.generateFrameNumbers('katzeHenri', {
+    start: 24,
+    end: 27
+  }),
+  frameRate: 6,
+  repeat: -1
+});
+// Fiete – drittletzte und vorletzte Reihe animieren
+const fieteTexture = this.textures.get('katzeFiete');
+
+const spalten = Math.floor(fieteTexture.source[0].width / 32);
+const zeilen = Math.floor(fieteTexture.source[0].height / 32);
+
+// Die beiden gewünschten Reihen
+const ersterFrame = (zeilen - 3) * spalten;
+const letzterFrame = (zeilen - 1) * spalten - 1;
+
+this.anims.create({
+  key: 'fiete-idle',
+  frames: this.anims.generateFrameNumbers('katzeFiete', {
+    start: ersterFrame,
+    end: letzterFrame
+  }),
+  frameRate: 4,
+  repeat: -1
+});
+      // ---------------------------------
+
+      // STATISCHE TIERE
+
+      // ---------------------------------
+
+      const addStaticAnimal = (
+
+        dx,
+
+        dy,
+
+        name,
+
+        texture,
+
+        description
+
+      ) => {
+
+        const [x, y] = place(dx, dy);
+
+        if (!this.textures.exists(texture)) {
+
+          console.warn(
+
+            'Tier-Spritesheet fehlt:',
+
+            texture
+
+          );
+
+          return;
+
+        }
+
+        const tier = this.add.sprite(
+
+          x,
+
+          y,
+
+          texture,
+
+          0
+
+        );
+
+        tier.setDepth(y);
+
+        tier.displayName = name;
+
+        tier.description = description;
+
+        tier.setInteractive({
+
+          useHandCursor: true
+
+        });
+
+        tier.on('pointerdown', () => {
+
+          say(tier.displayName, tier.description);
+
+        });
+
+        animals.push(tier);
+
+        this.add.text(
+
+          x,
+
+          y - 27,
+
+          name,
+
+          {
+
+            fontFamily: 'monospace',
+
+            fontSize: '10px',
+
+            color: '#ffffff',
+
+            backgroundColor: '#24392a',
+
+            padding: {
+
+              x: 3,
+
+              y: 2
+
+            }
+
+          }
+
+        )
+
+        .setOrigin(0.5)
+
+        .setDepth(y + 1);
+
+        return tier;
+
+      };
+
+      // Emil bleibt absichtlich statisch.
+
+      addStaticAnimal(
+
+        -665,
+
+        -50,
+
+        'Emil',
+
+        'hundEmil',
+
+dialoge.Emil
+      );
+
+      addStaticAnimal(
+
+        -113,
+
+        -555,
+
+        'Fiete',
+
+        'katzeFiete',
+
+        dialoge.Fiete
+
+      );
+      // Fiete bleibt stehen und spielt seine Animation ab
+const fiete = animals.find(tier => tier.displayName === 'Fiete');
+
+if (fiete) {
+  fiete.play('fiete-idle');
+}
+
+      addStaticAnimal(
+
+        290,
+
+        -560,
+
+        'Henri',
+
+        'katzeHenri',
+
+        dialoge.Henri
+
+      );
+      const henri = animals.find(tier => tier.displayName === 'Henri');
+
+if (henri) {
+  henri.startX = henri.x;
+  henri.walkDistance = 24;
+  henri.walkSpeed = 8;
+  henri.direction = -1;
+  henri.waitTime = 0;
+  henri.isWaiting = false;
+
+  henri.setFlipX(false);
+  henri.play('henri-laufen');
+
+  this.henri = henri;
+}
+
+              addStaticAnimal(
+          -225,
+          -170,
+          'Alfie',
+          'katzeAlfie',
+          dialoge.Alfie);
+
+        const alfie = animals.find(tier =>
+          tier.displayName === 'Alfie'
+        );
+
+        if (alfie) {
+          alfie.play('alfie-idle');
+        }
+
+      // ---------------------------------
+
+      // FREIEN STARTPLATZ SUCHEN
+
+      // ---------------------------------
+
+      let spawnX = px;
+
+      let spawnY = py;
+
+      // Der Spieler hat eine 12x12-Hitbox.
+
+      // Deshalb prüfen wir nicht nur den Mittelpunkt.
+
+      const freeAt = (x, y) => {
+
+        const points = [
+
+          [x - 6, y - 6],
+
+          [x + 6, y - 6],
+
+          [x - 6, y + 6],
+
+          [x + 6, y + 6]
+
+        ];
+
+        return points.every(([cx, cy]) => {
+
+          const tx = Math.floor(
+
+            cx / map.tileWidth
+
+          );
+
+          const ty = Math.floor(
+
+            cy / map.tileHeight
+
+          );
+
+          if (
+
+            tx < 0 ||
+
+            ty < 0 ||
+
+            tx >= map.width ||
+
+            ty >= map.height
+
+          ) {
+
+            return false;
+
+          }
+
+          return !waende.hasTileAt(tx, ty);
+
+        });
+
+      };
+
+      if (!freeAt(spawnX, spawnY)) {
+
+        let found = false;
+
+        const sx = Math.floor(
+
+          px / map.tileWidth
+
+        );
+
+        const sy = Math.floor(
+
+          py / map.tileHeight
+
+        );
+
+        for (
+
+          let radius = 1;
+
+          radius < Math.max(map.width, map.height) && !found;
+
+          radius++
+
+        ) {
+
+          for (
+
+            let yy = sy - radius;
+
+            yy <= sy + radius && !found;
+
+            yy++
+
+          ) {
+
+            for (
+
+              let xx = sx - radius;
+
+              xx <= sx + radius;
+
+              xx++
+
+            ) {
+
+              const x =
+
+                xx * map.tileWidth +
+
+                map.tileWidth / 2;
+
+              const y =
+
+                yy * map.tileHeight +
+
+                map.tileHeight / 2;
+
+              if (freeAt(x, y)) {
+
+                spawnX = x;
+
+                spawnY = y;
+
+                found = true;
+
+                break;
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+
+      // =====================================
+
+      // MAREI ALS SPIELFIGUR
+
+      // =====================================
+
+      if (!this.textures.exists('marei')) {
+
+        this.add.text(
+
+          30,
+
+          90,
+
+          'marei.png konnte nicht geladen werden!',
+
+          {
+
+            color: '#ffdddd',
+
+            fontSize: '18px'
+
+          }
+
+        );
+
+        return;
+
+      }
+
+      player = this.add.sprite(
+
+        spawnX,
+
+        spawnY,
+
+        'marei',
+
+        1
+
+      );
+
+      player.setScale(MAREI_SCALE);
+
+      player.setDepth(spawnY);
+
+      player.displayName = 'Marei';
+
+      player.description =
+
+        'Du erkundest euer Zuhause.';
+
+      // ---------------------------------
+
+      // MAREIS ANIMATIONEN
+
+      // ---------------------------------
+
+      const animations = [
+
+        {
+
+          key: 'marei-unten',
+
+          start: 0,
+
+          end: 2
+
+        },
+
+        {
+
+          key: 'marei-links',
+
+          start: 3,
+
+          end: 5
+
+        },
+
+        {
+
+          key: 'marei-rechts',
+
+          start: 6,
+
+          end: 8
+
+        },
+
+        {
+
+          key: 'marei-oben',
+
+          start: 9,
+
+          end: 11
+
+        }
+
+      ];
+
+      animations.forEach(animation => {
+
+        if (!this.anims.exists(animation.key)) {
+
+          this.anims.create({
+
+            key: animation.key,
+
+            frames:
+
+              this.anims.generateFrameNumbers(
+
+                'marei',
+
+                {
+
+                  start: animation.start,
+
+                  end: animation.end
+
+                }
+
+              ),
+
+            frameRate: 6,
+
+            repeat: -1
+
+          });
+
+        }
+
+      });
+
+      // =====================================
+
+      // UNSICHTBARER PHYSIK-KÖRPER
+
+      // =====================================
+
+      // Der Physik-Körper ist bewusst
+
+      // unabhängig vom sichtbaren Sprite.
+
+      // So bleibt die Wandkollision stabil.
+
+      const graphics = this.make.graphics(
+
+        {
+
+          x: 0,
+
+          y: 0
+
+        },
+
+        false
+
+      );
+
+      graphics.fillStyle(0xffffff);
+
+      graphics.fillRect(
+
+        0,
+
+        0,
+
+        12,
+
+        12
+
+      );
+
+      graphics.generateTexture(
+
+        'playerHitbox',
+
+        12,
+
+        12
+
+      );
+
+      graphics.destroy();
+
+      this.playerBody = this.physics.add.sprite(
+
+        spawnX,
+
+        spawnY,
+
+        'playerHitbox'
+
+      );
+
+      this.playerBody.setVisible(false);
+
+      this.playerBody.setCollideWorldBounds(true);
+
+      this.playerBody.body.setSize(
+
+        12,
+
+        12
+
+      );
+
+      this.physics.add.collider(
+
+        this.playerBody,
+
+        waende
+
+      );
+
+      // =====================================
+
+      // TASTEN
+
+      // =====================================
+
+      keys = this.input.keyboard.addKeys(
+
+        'W,A,S,D,UP,DOWN,LEFT,RIGHT,E'
+
+      );
+
+      this.input.keyboard.enabled = true;
+
+      this.input.keyboard.addCapture([
+
+        'UP',
+
+        'DOWN',
+
+        'LEFT',
+
+        'RIGHT',
+
+        'SPACE'
+
+      ]);
+
+      // =====================================
+
+      // KAMERA
+
+      // =====================================
+
+      this.cameras.main.setBounds(
+
+        0,
+
+        0,
+
+        worldWidth,
+
+        worldHeight
+
+      );
+
+      this.cameras.main.setZoom(2);
+
+      this.cameras.main.startFollow(
+
+        player,
+
+        true,
+
+        0.12,
+
+        0.12
+
+      );
+
+      this.cameras.main.centerOn(
+
+        spawnX,
+
+        spawnY
+
+      );
+
+      // Mausrad-Zoom
+
+      this.input.on(
+
+        'wheel',
+
+        (pointer, objects, dx, dy) => {
+
+          const camera = this.cameras.main;
+
+          camera.setZoom(
+
+            Phaser.Math.Clamp(
+
+              camera.zoom -
+
+              Math.sign(dy) * 0.25,
+
+              1,
+
+              3
+
+            )
+
+          );
+
+        }
+
+      );
+
+      // =====================================
+
+      // DIALOGBOX
+
+      // =====================================
+
+            const messageBox = this.add.rectangle(
+        VIEW_W / 2, VIEW_H - 44, VIEW_W - 24, 76,
+        0x182c24, 0.95
+      ).setStrokeStyle(2, 0xe8d6a4).setDepth(100000);
+
+      messageTitle = this.add.text(28, VIEW_H - 72, 'Willkommen zu Hause!', {
+        fontFamily: 'monospace', fontSize: '16px',
+        fontStyle: 'bold', color: '#ffe5a2'
+      }).setDepth(100001);
+
+      messageText = this.add.text(28, VIEW_H - 46,
+        'Erkunde die Karte und sprich mit deiner Familie!', {
+          fontFamily: 'monospace', fontSize: '12px', color: '#ffffff',
+          wordWrap: { width: VIEW_W - 65 }
+        }).setDepth(100001);
+
+      // Eine eigene Kamera hält den Dialog unabhängig vom Spielzoom fest.
+      const dialogKamera = this.cameras.add(0, 0, VIEW_W, VIEW_H);
+      dialogKamera.setZoom(1);
+      dialogKamera.setScroll(0, 0);
+      this.cameras.main.ignore([messageBox, messageTitle, messageText]);
+      this.children.list.forEach(objekt => {
+        if (objekt !== messageBox && objekt !== messageTitle && objekt !== messageText) {
+          dialogKamera.ignore(objekt);
+        }
+      });
+
+}
+
+    // =====================================
+
+    // SPIEL AKTUALISIEREN
+
+    // =====================================
+
+    function update(time, delta) {
+
+      if (
+
+        !player ||
+
+        !keys ||
+
+        !this.playerBody
+
+      ) {
+
+        return;
+
+      }
+
+      // ---------------------------------
+
+      // BEWEGUNG
+
+      // ---------------------------------
+
+      let dx = 0;
+
+      let dy = 0;
+
+      if (
+
+        keys.A.isDown ||
+
+        keys.LEFT.isDown
+
+      ) {
+
+        dx--;
+
+      }
+
+      if (
+
+        keys.D.isDown ||
+
+        keys.RIGHT.isDown
+
+      ) {
+
+        dx++;
+
+      }
+
+      if (
+
+        keys.W.isDown ||
+
+        keys.UP.isDown
+
+      ) {
+
+        dy--;
+
+      }
+
+      if (
+
+        keys.S.isDown ||
+
+        keys.DOWN.isDown
+
+      ) {
+
+        dy++;
+
+      }
+
+      // Diagonale Bewegung normalisieren
+
+      const length = Math.hypot(
+
+        dx,
+
+        dy
+
+      ) || 1;
+
+      this.playerBody.setVelocity(
+
+        dx / length * SPEED,
+
+        dy / length * SPEED
+
+      );
+
+      // ---------------------------------
+
+      // SICHTBARE MAREI FOLGT HITBOX
+
+      // ---------------------------------
+
+            // Mareis Füße stehen auf dem Kollisionspunkt
+      const fussAbstand = player.displayHeight / 2 - 3;
+
+      player.setPosition(
+        this.playerBody.x,
+        this.playerBody.y - fussAbstand
+      );
+      player.setDepth(this.playerBody.y);
+      // ---------------------------------
+
+      // LAUFANIMATIONEN
+
+      // ---------------------------------
+
+      let animation = null;
+
+      if (dx < 0) {
+
+        animation = 'marei-links';
+
+      }
+
+      else if (dx > 0) {
+
+        animation = 'marei-rechts';
+
+      }
+
+      else if (dy < 0) {
+
+        animation = 'marei-oben';
+
+      }
+
+      else if (dy > 0) {
+
+        animation = 'marei-unten';
+
+      }
+
+      if (animation) {
+
+        if (
+
+          player.anims.currentAnim?.key !== animation ||
+
+          !player.anims.isPlaying
+
+        ) {
+
+          player.play(animation);
+
+        }
+
+      } else {
+
+        if (player.anims.isPlaying) {
+
+          player.anims.stop();
+
+        }
+
+      }
+
+// Lia läuft nach oben und unten
+if (this.lia && this.lia.active) {
+
+  const lia = this.lia;
+
+  // Bewegung auf der Y-Achse
+  lia.y += lia.walkDirection * lia.walkSpeed * (delta / 1000);
+
+  // Unten angekommen: nach oben laufen
+  if (lia.y >= lia.startY + lia.walkDistance) {
+    lia.y = lia.startY + lia.walkDistance;
+    lia.walkDirection = -1;
+    lia.play('lia-hinten', true);
+  }
+
+  // Oben angekommen: nach unten laufen
+  if (lia.y <= lia.startY) {
+    lia.y = lia.startY;
+    lia.walkDirection = 1;
+    lia.play('lia-vorne', true);
+  }
+
+  lia.setDepth(lia.y);
+  this.liaName.setY(lia.y - 30);
+
+}
+
+// Jari läuft ein kleines Stück hin und her
+
+if (this.jari && this.jari.active) {
+
+    const jari = this.jari;
+
+    jari.x += jari.walkDirection * jari.walkSpeed * (delta / 1000);
+
+    if (jari.x >= jari.startX + jari.walkDistance) {
+
+        jari.x = jari.startX + jari.walkDistance;
+
+        jari.walkDirection = -1;
+
+        jari.play('jari-links', true);
+
+    }
+
+    if (jari.x <= jari.startX) {
+
+        jari.x = jari.startX;
+
+        jari.walkDirection = 1;
+
+        jari.play('jari-rechts', true);
+
+    }
+
+    jari.setDepth(jari.y);
+
+    this.jariName.setX(jari.x);
+
+}
+// Henri läuft nach links, wartet und läuft gespiegelt zurück
+if (this.henri && this.henri.active) {
+  const henri = this.henri;
+
+  if (henri.isWaiting) {
+    henri.waitTime -= delta;
+
+    if (henri.waitTime <= 0) {
+      henri.isWaiting = false;
+      henri.direction *= -1;
+      henri.setFlipX(henri.direction === 1);
+      henri.play('henri-laufen');
+    }
+  } else {
+    henri.x += henri.direction * henri.walkSpeed * (delta / 1000);
+
+    if (henri.x <= henri.startX - henri.walkDistance) {
+      henri.x = henri.startX - henri.walkDistance;
+      henri.anims.stop();
+      henri.isWaiting = true;
+      henri.waitTime = 3000;
+    } else if (henri.x >= henri.startX) {
+      henri.x = henri.startX;
+      henri.anims.stop();
+      henri.isWaiting = true;
+      henri.waitTime = 3000;
+    }
+  }
+}
+      // ---------------------------------
+
+      // MIT E INTERAGIEREN
+
+      // ---------------------------------
+
+      if (
+
+        Phaser.Input.Keyboard.JustDown(
+
+          keys.E
+
+        )
+
+      ) {
+
+        const candidates = [
+
+          ...people,
+
+          ...animals
+
+        ];
+
+        let closest = null;
+
+        let closestDistance = Infinity;
+
+        candidates.forEach(target => {
+
+          if (!target.active) {
+
+            return;
+
+          }
+
+          const distance =
+
+            Phaser.Math.Distance.Between(
+
+              player.x,
+
+              player.y,
+
+              target.x,
+
+              target.y
+
+            );
+
+          if (distance < closestDistance) {
+
+            closestDistance = distance;
+
+            closest = target;
+
+          }
+
+        });
+
+        if (
+
+          closest &&
+
+          closestDistance < 65
+
+        ) {
+
+          say(
+
+            closest.displayName,
+
+            closest.description
+
+          );
+
+        }
+
+      }
+
+    }
+
+  </script>
+
+</body>
+
+</html>
